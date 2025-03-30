@@ -35,10 +35,7 @@ def create_app(config_class=Config):
 
     return app
 
-# Import models here to avoid circular imports
-from app.models.user import User
-from app.models.assessment import Assessment
-
 @login_manager.user_loader
 def load_user(id):
+    from app.models.user import User  # Import here to avoid circular imports
     return User.query.get(int(id))
