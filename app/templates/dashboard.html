@@ -6,7 +6,7 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>Dashboard</h1>
-        <a href="#" class="btn btn-primary">Create New Assessment</a>
+        <a href="{{ url_for('main.new_assessment') }}" class="btn btn-primary">Create New Assessment</a>
     </div>
 
     <div class="row">
@@ -70,8 +70,8 @@
                                 </span>
                             </td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-outline-primary">View</a>
-                                <a href="#" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a href="{{ url_for('main.view_assessment', id=assessment.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                <a href="{{ url_for('main.edit_assessment', id=assessment.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
                             </td>
                         </tr>
                         {% endfor %}

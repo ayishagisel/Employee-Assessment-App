@@ -13,9 +13,9 @@ def init_db():
         if not User.query.filter_by(username='testuser').first():
             test_user = User(
                 username='testuser',
-                email='test@example.com',
-                password_hash=generate_password_hash('password123', method='pbkdf2:sha256')
+                email='test@example.com'
             )
+            test_user.set_password('password123')
             db.session.add(test_user)
             db.session.commit()
             

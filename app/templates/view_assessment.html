@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}View Assessment{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">Assessment Details</h2>
+                    <div>
+                        <a href="{{ url_for('main.edit_assessment', id=assessment.id) }}" class="btn btn-primary">Edit</a>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Employee Information</h5>
+                            <table class="table">
+                                <tr>
+                                    <th>Name:</th>
+                                    <td>{{ assessment.employee_name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Position:</th>
+                                    <td>{{ assessment.position }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Department:</th>
+                                    <td>{{ assessment.department }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Review Details</h5>
+                            <table class="table">
+                                <tr>
+                                    <th>Review Period:</th>
+                                    <td>{{ assessment.review_period }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Performance Rating:</th>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if assessment.performance_rating >= 4 else 'warning' if assessment.performance_rating >= 3 else 'danger' }}">
+                                            {{ assessment.performance_rating }}/5
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Created:</th>
+                                    <td>{{ assessment.created_at.strftime('%B %d, %Y') }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5>Strengths</h5>
+                        <p class="card-text">{{ assessment.strengths }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5>Areas for Improvement</h5>
+                        <p class="card-text">{{ assessment.areas_for_improvement }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5>Goals</h5>
+                        <p class="card-text">{{ assessment.goals }}</p>
+                    </div>
+
+                    {% if assessment.comments %}
+                    <div class="mb-4">
+                        <h5>Additional Comments</h5>
+                        <p class="card-text">{{ assessment.comments }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if analysis %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="mb-0">AI Analysis</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Sentiment Analysis</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">Sentiment Score:</h6>
+                                        <div class="progress" style="width: 70%;">
+                                            <div class="progress-bar bg-{{ 'success' if analysis.sentiment_analysis.sentiment_score >= 0.7 else 'warning' if analysis.sentiment_analysis.sentiment_score >= 0.4 else 'danger' }}"
+                                                role="progressbar"
+                                                style="width: {{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%"
+                                                aria-valuenow="{{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}"
+                                                aria-valuemin="0"
+                                                aria-valuemax="100">{{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%</div>
+                                        </div>
+                                    </div>
+                                    <p><strong>Label:</strong> {{ analysis.sentiment_analysis.sentiment_label }}</p>
+                                    <p><strong>Confidence:</strong> {{ (analysis.sentiment_analysis.confidence * 100)|round }}%</p>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Key Strengths Identified</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        {% for strength in analysis.sentiment_analysis.strengths %}
+                                        <li class="list-group-item">{{ strength }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Promotion Recommendation</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-{{ 'success' if analysis.promotion_recommendation.promotion_recommended else 'warning' }}">
+                                        <strong>Recommendation:</strong>
+                                        {% if analysis.promotion_recommendation.promotion_recommended %}
+                                        Promotion recommended to {{ analysis.promotion_recommendation.recommended_role }}
+                                        {% else %}
+                                        Continue in current role
+                                        {% endif %}
+                                    </div>
+                                    <p><strong>Confidence:</strong> {{ (analysis.promotion_recommendation.confidence_score * 100)|round }}%</p>
+                                    <p><strong>Timeline:</strong> {{ analysis.promotion_recommendation.timeline }}</p>
+                                    <p><strong>Rationale:</strong> {{ analysis.promotion_recommendation.rationale }}</p>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Development Areas</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        {% for area in analysis.promotion_recommendation.development_areas %}
+                                        <li class="list-group-item">{{ area }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <p class="mb-0">
+                        <em>AI analysis not available. Click the button below to analyze this assessment.</em>
+                    </p>
+                    <button class="btn btn-primary mt-3" onclick="analyzeAssessment({{ assessment.id }})">
+                        Analyze Assessment
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function analyzeAssessment(id) {
+    const button = event.target;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Analyzing...';
+
+    fetch(`/assessment/${id}/analyze`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        })
+        .finally(() => {
+            button.disabled = false;
+            button.innerHTML = 'Analyze Assessment';
+        });
+}
+</script>
+{% endblock %} 
