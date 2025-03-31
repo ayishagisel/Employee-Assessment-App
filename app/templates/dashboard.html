@@ -1,87 +1,46 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
-
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Dashboard</h1>
-        <a href="#" class="btn btn-primary">Create New Assessment</a>
-    </div>
-
+<div class="container mt-4">
     <div class="row">
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Recent Assessments</h5>
-                    <h2 class="display-4">{{ current_user.assessments.count() }}</h2>
-                    <p class="text-muted">Total assessments created</p>
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Employee Assessments Dashboard</h2>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card mb-4">
                 <div class="card-body">
-                    <h5 class="card-title">Pending Reviews</h5>
-                    <h2 class="display-4">0</h2>
-                    <p class="text-muted">Assessments awaiting review</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Completed Reviews</h5>
-                    <h2 class="display-4">0</h2>
-                    <p class="text-muted">Finalized assessments</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Recent Assessments</h5>
-        </div>
-        <div class="card-body">
-            {% if current_user.assessments.count() > 0 %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Employee Name</th>
-                            <th>Position</th>
-                            <th>Department</th>
-                            <th>Review Period</th>
-                            <th>Rating</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for assessment in current_user.get_assessments().limit(5).all() %}
-                        <tr>
-                            <td>{{ assessment.employee_name }}</td>
-                            <td>{{ assessment.position }}</td>
-                            <td>{{ assessment.department }}</td>
-                            <td>{{ assessment.review_period }}</td>
-                            <td>
-                                <span class="badge bg-{{ 'success' if assessment.performance_rating >= 4 else 'warning' if assessment.performance_rating >= 3 else 'danger' }}">
-                                    {{ assessment.performance_rating }}/5
-                                </span>
-                            </td>
-                            <td>
-                                <a href="#" class="btn btn-sm btn-outline-primary">View</a>
-                                <a href="#" class="btn btn-sm btn-outline-secondary">Edit</a>
-                            </td>
-                        </tr>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <form action="{{ url_for('main.search') }}" method="POST">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="search_query" placeholder="Search assessments...">
+                                    <button class="btn btn-primary" type="submit">Search</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        {% for assessment in assessments %}
+                        <div class="col-md-4 mb-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ assessment.employee_name }}</h5>
+                                    <p class="card-text">
+                                        <strong>Position:</strong> {{ assessment.position }}<br>
+                                        <strong>Department:</strong> {{ assessment.department }}<br>
+                                        <strong>Review Period:</strong> {{ assessment.review_period }}<br>
+                                        <strong>Rating:</strong> {{ assessment.performance_rating }}/5
+                                    </p>
+                                    <a href="{{ url_for('main.assessment_detail', assessment_id=assessment.id) }}" class="btn btn-primary">View Details</a>
+                                </div>
+                            </div>
+                        </div>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </div>
+                </div>
             </div>
-            {% else %}
-            <p class="text-center mb-0">No assessments found. Create your first assessment to get started!</p>
-            {% endif %}
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

@@ -2,7 +2,6 @@ from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from app.models.assessment import Assessment
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -26,4 +25,4 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
     def get_assessments(self):
-        return self.assessments.order_by(Assessment.created_at.desc()) 
+        return self.assessments.order_by(Assessment.created_at.desc())

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Assessment Detail{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card">
+        <div class="card-header">
+            <h3>{{ assessment.employee_name }}</h3>
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">{{ assessment.position }}</h5>
+            <p class="card-text">
+                <strong>Department:</strong> {{ assessment.department }}<br>
+                <strong>Review Period:</strong> {{ assessment.review_period }}<br>
+                <strong>Performance Rating:</strong> {{ assessment.performance_rating }}/5
+            </p>
+            <div class="mb-3">
+                <h6>Strengths</h6>
+                <p>{{ assessment.strengths }}</p>
+            </div>
+            <div class="mb-3">
+                <h6>Areas for Improvement</h6>
+                <p>{{ assessment.areas_for_improvement }}</p>
+            </div>
+            <div class="mb-3">
+                <h6>Goals</h6>
+                <p>{{ assessment.goals }}</p>
+            </div>
+            <div class="mb-3">
+                <h6>Comments</h6>
+                <p>{{ assessment.comments }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
