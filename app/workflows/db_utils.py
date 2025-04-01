@@ -1,17 +1,22 @@
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores.pgvector import PGVector
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import PGVector
 from sqlalchemy import create_engine, text
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import asyncio
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def setup_vector_store(connection_string: str, openai_api_key: str) -> PGVector:
+async def setup_vector_store(connection_string: str, openai_api_key: str) -> Optional[PGVector]:
     """Initialize and setup the vector store in PostgreSQL."""
     try:
-        embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+        embeddings = OpenAIEmbeddings(
+            openai_api_key=openai_api_key,
+            model="text-embedding-ada-002"
+        )
         vector_store = PGVector.from_documents(
             [],  # Empty initial documents
             embeddings,
@@ -22,14 +27,21 @@ async def setup_vector_store(connection_string: str, openai_api_key: str) -> PGV
         return vector_store
     except Exception as e:
         logger.error(f"Error setting up vector store: {str(e)}")
+        if "insufficient_quota" in str(e):
+            logger.warning("OpenAI API quota exceeded. Vector store functionality will be limited.")
+            return None
         raise
 
 async def add_review_to_vector_store(
-    vector_store: PGVector,
+    vector_store: Optional[PGVector],
     review_text: str,
     metadata: Dict[str, Any]
 ) -> bool:
     """Add a new review to the vector store with metadata."""
+    if vector_store is None:
+        logger.warning("Vector store not available due to API quota limits. Skipping review addition.")
+        return False
+        
     try:
         await vector_store.aadd_texts(
             texts=[review_text],
@@ -42,6 +54,9 @@ async def add_review_to_vector_store(
         return True
     except Exception as e:
         logger.error(f"Error adding review to vector store: {str(e)}")
+        if "insufficient_quota" in str(e):
+            logger.warning("OpenAI API quota exceeded. Skipping review addition.")
+            return False
         return False
 
 def setup_metrics_table(connection_string: str):
@@ -73,11 +88,19 @@ def setup_metrics_table(connection_string: str):
         raise
 
 async def batch_add_reviews_to_vector_store(
-    vector_store: PGVector,
+    vector_store: Optional[PGVector],
     reviews: List[Dict[str, Any]],
     batch_size: int = 50
 ) -> Dict[str, Any]:
     """Add multiple reviews to the vector store in batches."""
+    if vector_store is None:
+        logger.warning("Vector store not available due to API quota limits. Skipping batch addition.")
+        return {
+            "total": len(reviews),
+            "successful": 0,
+            "failed": len(reviews)
+        }
+        
     total = len(reviews)
     successful = 0
     failed = 0
@@ -99,6 +122,9 @@ async def batch_add_reviews_to_vector_store(
         except Exception as e:
             failed += len(batch)
             logger.error(f"Error processing batch {i//batch_size + 1}: {str(e)}")
+            if "insufficient_quota" in str(e):
+                logger.warning("OpenAI API quota exceeded. Stopping batch processing.")
+                break
     
     return {
         "total": total,

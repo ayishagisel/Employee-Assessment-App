@@ -2,201 +2,559 @@
 
 {% block title %}View Assessment{% endblock %}
 
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .chart-container {
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    .chart-container:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .progress-bar {
+        transition: width 1s ease-in-out;
+    }
+    .error-details {
+        font-size: 0.9rem;
+        color: #666;
+        margin-top: 0.5rem;
+    }
+    .retry-button {
+        margin-top: 1rem;
+    }
+    .technical-details {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    .technical-details pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+    .status-active {
+        background-color: #28a745;
+    }
+    .status-warning {
+        background-color: #ffc107;
+    }
+    .status-error {
+        background-color: #dc3545;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-10">
-            <div class="card mb-4">
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h2 class="mb-0">Assessment Details</h2>
-                    <div>
-                        <a href="{{ url_for('main.edit_assessment', id=assessment.id) }}" class="btn btn-primary">Edit</a>
-                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
-                    </div>
+                    {% if not analysis %}
+                    <a href="{{ url_for('main.analyze_assessment', id=assessment.id) }}" 
+                       class="btn btn-primary retry-button"
+                       onclick="return confirm('This will attempt to reanalyze the assessment. Continue?')">
+                        <i class="fas fa-sync-alt"></i> Retry Analysis
+                    </a>
+                    {% endif %}
                 </div>
                 <div class="card-body">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h5>Employee Information</h5>
-                            <table class="table">
-                                <tr>
-                                    <th>Name:</th>
-                                    <td>{{ assessment.employee_name }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Position:</th>
-                                    <td>{{ assessment.position }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Department:</th>
-                                    <td>{{ assessment.department }}</td>
-                                </tr>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <h5>Review Details</h5>
-                            <table class="table">
-                                <tr>
-                                    <th>Review Period:</th>
-                                    <td>{{ assessment.review_period }}</td>
-                                </tr>
-                                <tr>
-                                    <th>Performance Rating:</th>
-                                    <td>
-                                        <span class="badge bg-{{ 'success' if assessment.performance_rating >= 4 else 'warning' if assessment.performance_rating >= 3 else 'danger' }}">
-                                            {{ assessment.performance_rating }}/5
-                                        </span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Created:</th>
-                                    <td>{{ assessment.created_at.strftime('%B %d, %Y') }}</td>
-                                </tr>
-                            </table>
+                    <div class="mb-4">
+                        <h5>Employee Information</h5>
+                        <p><strong>Name:</strong> {{ assessment.employee_name }}</p>
+                        <p><strong>Department:</strong> {{ assessment.department }}</p>
+                        <p><strong>Role Level:</strong> {{ assessment.role_level }}</p>
+                        <p><strong>Date:</strong> {{ assessment.date.strftime('%Y-%m-%d') }}</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5>Review Content</h5>
+                        <div class="border rounded p-3 bg-light">
+                            {{ assessment.review_content }}
                         </div>
                     </div>
 
+                    {% if analysis %}
                     <div class="mb-4">
-                        <h5>Strengths</h5>
-                        <p class="card-text">{{ assessment.strengths }}</p>
+                        <h5>Analysis Results</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6>Sentiment Analysis</h6>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar {% if analysis.sentiment_analysis.sentiment_score > 0.6 %}bg-success{% elif analysis.sentiment_analysis.sentiment_score > 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%"
+                                                 aria-valuenow="{{ analysis.sentiment_analysis.sentiment_score }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="1">
+                                                {{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%
+                                            </div>
+                                        </div>
+                                        <p class="mb-1"><small>Confidence: {{ (analysis.sentiment_analysis.confidence * 100)|round }}%</small></p>
+                                        <p class="mb-0"><small>Key Phrases: {{ analysis.sentiment_analysis.key_phrases|join(', ') }}</small></p>
+                                        
+                                        <div class="mt-3">
+                                            <canvas id="sentimentRadarChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6>Promotion Recommendation</h6>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge {% if analysis.promotion_recommendation.promotion_recommended %}bg-success{% else %}bg-secondary{% endif %} me-2">
+                                                {{ "Recommended" if analysis.promotion_recommendation.promotion_recommended else "Not Recommended" }}
+                                            </span>
+                                            <div class="progress flex-grow-1" style="height: 20px;">
+                                                <div class="progress-bar {% if analysis.promotion_recommendation.confidence_score > 0.7 %}bg-success{% elif analysis.promotion_recommendation.confidence_score > 0.5 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                     role="progressbar" 
+                                                     style="width: {{ (analysis.promotion_recommendation.confidence_score * 100)|round }}%"
+                                                     aria-valuenow="{{ analysis.promotion_recommendation.confidence_score }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="1">
+                                                    {{ (analysis.promotion_recommendation.confidence_score * 100)|round }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="mb-0"><small>Key Factors: {{ analysis.promotion_recommendation.key_factors|join(', ') }}</small></p>
+                                        
+                                        <div class="mt-3">
+                                            <canvas id="promotionBarChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
+                    {% if analysis.validation_warning %}
                     <div class="mb-4">
-                        <h5>Areas for Improvement</h5>
-                        <p class="card-text">{{ assessment.areas_for_improvement }}</p>
-                    </div>
+                        <h5>Fairness Validation Results</h5>
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading">Potential Bias Detected</h6>
+                            <p class="mb-2">The analysis has identified potential biases in the assessment process. Please review the detailed metrics below.</p>
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-4">
+                                    <div class="card bg-light">
+                                        <div class="card-body text-center">
+                                            <h6>Total Validations</h6>
+                                            <h3 class="mb-0">{{ analysis.validation_warning.total_validations }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card bg-success text-white">
+                                        <div class="card-body text-center">
+                                            <h6>Passed</h6>
+                                            <h3 class="mb-0">{{ analysis.validation_warning.passed_validations }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card bg-danger text-white">
+                                        <div class="card-body text-center">
+                                            <h6>Failed</h6>
+                                            <h3 class="mb-0">{{ analysis.validation_warning.failed_validations }}</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div class="mb-4">
-                        <h5>Goals</h5>
-                        <p class="card-text">{{ assessment.goals }}</p>
-                    </div>
+                            <div class="mt-4">
+                                <h6>Failed Validations</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Metric</th>
+                                                <th>Value</th>
+                                                <th>Threshold</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric in analysis.validation_warning.metrics.values() %}
+                                                {% for result in metric %}
+                                                    {% if not result.passed %}
+                                                    <tr>
+                                                        <td>{{ result.name|replace('_', ' ')|title }}</td>
+                                                        <td>
+                                                            <div class="progress" style="height: 20px;">
+                                                                <div class="progress-bar bg-danger" 
+                                                                     role="progressbar" 
+                                                                     style="width: {{ (result.value * 100)|round }}%"
+                                                                     aria-valuenow="{{ result.value }}" 
+                                                                     aria-valuemin="0" 
+                                                                     aria-valuemax="1">
+                                                                    {{ (result.value * 100)|round }}%
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>{{ (result.threshold * 100)|round }}%</td>
+                                                        <td>
+                                                            <button class="btn btn-sm btn-outline-primary" 
+                                                                    type="button" 
+                                                                    data-bs-toggle="collapse" 
+                                                                    data-bs-target="#details-{{ loop.index }}">
+                                                                View Details
+                                                            </button>
+                                                            <div class="collapse mt-2" id="details-{{ loop.index }}">
+                                                                <div class="card card-body">
+                                                                    {% for key, value in result.details.items() %}
+                                                                        <p class="mb-1"><strong>{{ key|replace('_', ' ')|title }}:</strong></p>
+                                                                        {% if value is mapping %}
+                                                                            <ul class="list-unstyled ms-3">
+                                                                                {% for k, v in value.items() %}
+                                                                                    <li>{{ k }}: {{ (v * 100)|round }}%</li>
+                                                                                {% endfor %}
+                                                                            </ul>
+                                                                        {% else %}
+                                                                            <p class="ms-3">{{ value }}</p>
+                                                                        {% endif %}
+                                                                    {% endfor %}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
 
-                    {% if assessment.comments %}
-                    <div class="mb-4">
-                        <h5>Additional Comments</h5>
-                        <p class="card-text">{{ assessment.comments }}</p>
+                            <div class="mt-4">
+                                <h6>Fairness Metrics Overview</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <canvas id="fairnessMetricsChart"></canvas>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <canvas id="biasDistributionChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading">Analysis Not Available</h5>
+                        <p class="mb-2">The assessment analysis is currently unavailable. This could be due to:</p>
+                        <ul class="mb-2">
+                            <li>Temporary service issues with the analysis pipeline</li>
+                            <li>Processing delays in the system</li>
+                            <li>Insufficient data for analysis</li>
+                            <li>API rate limits or connectivity issues</li>
+                        </ul>
+                        
+                        <div class="technical-details">
+                            <h6 class="mb-3">Technical Details</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2">
+                                        <span class="status-indicator {% if assessment.status == 'completed' %}status-active{% elif assessment.status == 'processing' %}status-warning{% else %}status-error{% endif %}"></span>
+                                        <strong>Status:</strong> {{ assessment.status|title if assessment.status else 'Unknown' }}
+                                    </p>
+                                    <p class="mb-2"><strong>Last Attempt:</strong> {{ assessment.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                                    <p class="mb-2"><strong>Assessment ID:</strong> {{ assessment.id }}</p>
+                                    <p class="mb-2"><strong>Processing Time:</strong> {{ assessment.processing_time|default('N/A') }} seconds</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong>API Status:</strong> {{ assessment.api_status|default('Unknown') }}</p>
+                                    <p class="mb-2"><strong>Error Code:</strong> {{ assessment.error_code|default('N/A') }}</p>
+                                    <p class="mb-2"><strong>Retry Count:</strong> {{ assessment.retry_count|default(0) }}</p>
+                                </div>
+                            </div>
+                            
+                            {% if assessment.error_message %}
+                            <div class="mt-3">
+                                <h6 class="mb-2">Error Message</h6>
+                                <pre class="text-danger">{{ assessment.error_message }}</pre>
+                            </div>
+                            {% endif %}
+                            
+                            {% if assessment.validation_metrics %}
+                            <div class="mt-3">
+                                <h6 class="mb-2">Validation Metrics</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Metric</th>
+                                                <th>Value</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric, value in assessment.validation_metrics.items() %}
+                                            <tr>
+                                                <td>{{ metric|replace('_', ' ')|title }}</td>
+                                                <td>{{ value.value }}</td>
+                                                <td>
+                                                    <span class="badge {% if value.status == 'passed' %}bg-success{% elif value.status == 'warning' %}bg-warning{% else %}bg-danger{% endif %}">
+                                                        {{ value.status|title }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-3">
+                            <a href="{{ url_for('main.analyze_assessment', id=assessment.id) }}" 
+                               class="btn btn-primary"
+                               onclick="return confirm('This will attempt to reanalyze the assessment. Continue?')">
+                                <i class="fas fa-sync-alt"></i> Retry Analysis
+                            </a>
+                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Return to Dashboard
+                            </a>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
             </div>
-
-            {% if analysis %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h3 class="mb-0">AI Analysis</h3>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Sentiment Analysis</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h6 class="mb-0">Sentiment Score:</h6>
-                                        <div class="progress" style="width: 70%;">
-                                            <div class="progress-bar bg-{{ 'success' if analysis.sentiment_analysis.sentiment_score >= 0.7 else 'warning' if analysis.sentiment_analysis.sentiment_score >= 0.4 else 'danger' }}"
-                                                role="progressbar"
-                                                style="width: {{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%"
-                                                aria-valuenow="{{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}"
-                                                aria-valuemin="0"
-                                                aria-valuemax="100">{{ (analysis.sentiment_analysis.sentiment_score * 100)|round }}%</div>
-                                        </div>
-                                    </div>
-                                    <p><strong>Label:</strong> {{ analysis.sentiment_analysis.sentiment_label }}</p>
-                                    <p><strong>Confidence:</strong> {{ (analysis.sentiment_analysis.confidence * 100)|round }}%</p>
-                                </div>
-                            </div>
-
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Key Strengths Identified</h5>
-                                </div>
-                                <div class="card-body">
-                                    <ul class="list-group list-group-flush">
-                                        {% for strength in analysis.sentiment_analysis.strengths %}
-                                        <li class="list-group-item">{{ strength }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="card mb-3">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Promotion Recommendation</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="alert alert-{{ 'success' if analysis.promotion_recommendation.promotion_recommended else 'warning' }}">
-                                        <strong>Recommendation:</strong>
-                                        {% if analysis.promotion_recommendation.promotion_recommended %}
-                                        Promotion recommended to {{ analysis.promotion_recommendation.recommended_role }}
-                                        {% else %}
-                                        Continue in current role
-                                        {% endif %}
-                                    </div>
-                                    <p><strong>Confidence:</strong> {{ (analysis.promotion_recommendation.confidence_score * 100)|round }}%</p>
-                                    <p><strong>Timeline:</strong> {{ analysis.promotion_recommendation.timeline }}</p>
-                                    <p><strong>Rationale:</strong> {{ analysis.promotion_recommendation.rationale }}</p>
-                                </div>
-                            </div>
-
-                            <div class="card">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Development Areas</h5>
-                                </div>
-                                <div class="card-body">
-                                    <ul class="list-group list-group-flush">
-                                        {% for area in analysis.promotion_recommendation.development_areas %}
-                                        <li class="list-group-item">{{ area }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="card mb-4">
-                <div class="card-body text-center">
-                    <p class="mb-0">
-                        <em>AI analysis not available. Click the button below to analyze this assessment.</em>
-                    </p>
-                    <button class="btn btn-primary mt-3" onclick="analyzeAssessment({{ assessment.id }})">
-                        Analyze Assessment
-                    </button>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
 
+{% if analysis %}
 <script>
-function analyzeAssessment(id) {
-    const button = event.target;
-    button.disabled = true;
-    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Analyzing...';
+// Common animation settings
+const animationConfig = {
+    duration: 2000,
+    easing: 'easeInOutQuart',
+    delay: 0
+};
 
-    fetch(`/assessment/${id}/analyze`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Error: ' + data.error);
-            } else {
-                window.location.reload();
+// Sentiment Analysis Radar Chart
+const sentimentCtx = document.getElementById('sentimentRadarChart').getContext('2d');
+new Chart(sentimentCtx, {
+    type: 'radar',
+    data: {
+        labels: ['Sentiment Score', 'Confidence', 'Key Phrases Impact'],
+        datasets: [{
+            label: 'Current Assessment',
+            data: [
+                {{ analysis.sentiment_analysis.sentiment_score }},
+                {{ analysis.sentiment_analysis.confidence }},
+                {{ analysis.sentiment_analysis.key_phrases|length * 0.1 }}
+            ],
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(54, 162, 235, 1)',
+            pointRadius: 4,
+            pointHoverRadius: 6
+        }]
+    },
+    options: {
+        animation: animationConfig,
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 1,
+                ticks: {
+                    stepSize: 0.2
+                }
             }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        })
-        .finally(() => {
-            button.disabled = false;
-            button.innerHTML = 'Analyze Assessment';
-        });
-}
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `${context.parsed.r.toFixed(2)}`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Promotion Recommendation Bar Chart
+const promotionCtx = document.getElementById('promotionBarChart').getContext('2d');
+new Chart(promotionCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Confidence Score', 'Key Factors Impact'],
+        datasets: [{
+            label: 'Recommendation Metrics',
+            data: [
+                {{ analysis.promotion_recommendation.confidence_score }},
+                {{ analysis.promotion_recommendation.key_factors|length * 0.1 }}
+            ],
+            backgroundColor: [
+                'rgba(75, 192, 192, 0.6)',
+                'rgba(153, 102, 255, 0.6)'
+            ],
+            borderColor: [
+                'rgba(75, 192, 192, 1)',
+                'rgba(153, 102, 255, 1)'
+            ],
+            borderWidth: 1,
+            borderRadius: 5,
+            hoverOffset: 4
+        }]
+    },
+    options: {
+        animation: animationConfig,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 1,
+                ticks: {
+                    stepSize: 0.2
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `${context.parsed.y.toFixed(2)}`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+{% if analysis.validation_warning %}
+// Fairness Metrics Chart
+const fairnessCtx = document.getElementById('fairnessMetricsChart').getContext('2d');
+new Chart(fairnessCtx, {
+    type: 'bar',
+    data: {
+        labels: ['Passed', 'Failed'],
+        datasets: [{
+            label: 'Validation Results',
+            data: [
+                {{ analysis.validation_warning.passed_validations }},
+                {{ analysis.validation_warning.failed_validations }}
+            ],
+            backgroundColor: [
+                'rgba(75, 192, 192, 0.6)',
+                'rgba(255, 99, 132, 0.6)'
+            ],
+            borderColor: [
+                'rgba(75, 192, 192, 1)',
+                'rgba(255, 99, 132, 1)'
+            ],
+            borderWidth: 1,
+            borderRadius: 5,
+            hoverOffset: 4
+        }]
+    },
+    options: {
+        animation: animationConfig,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `${context.parsed.y} validations`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Bias Distribution Chart
+const biasCtx = document.getElementById('biasDistributionChart').getContext('2d');
+const biasData = {
+    labels: [],
+    datasets: [{
+        label: 'Bias Score',
+        data: [],
+        backgroundColor: 'rgba(255, 99, 132, 0.6)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        borderWidth: 1,
+        borderRadius: 5,
+        hoverOffset: 4
+    }]
+};
+
+{% for metric in analysis.validation_warning.metrics.values() %}
+    {% for result in metric %}
+        {% if not result.passed %}
+            biasData.labels.push('{{ result.name|replace('_', ' ')|title }}');
+            biasData.datasets[0].data.push({{ result.value }});
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+new Chart(biasCtx, {
+    type: 'bar',
+    data: biasData,
+    options: {
+        animation: animationConfig,
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 1,
+                ticks: {
+                    stepSize: 0.2
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `Bias Score: ${context.parsed.y.toFixed(2)}`;
+                    }
+                }
+            }
+        }
+    }
+});
+{% endif %}
 </script>
+{% endif %}
 {% endblock %} 

@@ -1,6 +1,6 @@
-from langchain.chat_models import ChatOpenAI
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores.pgvector import PGVector
+from langchain_community.chat_models import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 from langchain.schema import Document
@@ -14,42 +14,145 @@ import os
 from sqlalchemy import create_engine, text
 from concurrent.futures import ThreadPoolExecutor
 import json
+from ..validation.fairness_validator import FairnessValidator
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+from ..models import db, Assessment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class SentimentAnalysis(BaseModel):
+    """Model for sentiment analysis results."""
+    sentiment_score: float = Field(description="Overall sentiment score between -1 and 1")
+    sentiment_label: str = Field(description="Human-readable sentiment label (e.g., 'Positive', 'Negative', 'Neutral')")
+    confidence: float = Field(description="Confidence score between 0 and 1")
+    strengths: List[str] = Field(description="List of identified strengths in the review")
+    weaknesses: Optional[List[str]] = Field(description="List of identified areas for improvement", default_factory=list)
+    key_themes: Optional[List[str]] = Field(description="Key themes identified in the review", default_factory=list)
+
+class PromotionRecommendation(BaseModel):
+    """Model for promotion recommendation results."""
+    promotion_recommended: bool = Field(description="Whether a promotion is recommended")
+    recommended_role: Optional[str] = Field(description="Recommended new role if promotion is recommended")
+    confidence_score: float = Field(description="Confidence score between 0 and 1")
+    timeline: Optional[str] = Field(description="Recommended timeline for promotion")
+    rationale: str = Field(description="Explanation for the recommendation")
+    development_areas: Optional[List[str]] = Field(description="Areas that need development before promotion", default_factory=list)
+
 class AssessmentPipeline:
     def __init__(self, db_connection_string: str, openai_api_key: str):
+        """Initialize the assessment pipeline with database connection and OpenAI API key."""
         self.db_connection_string = db_connection_string
         self.openai_api_key = openai_api_key
         
-        # Initialize LangChain components
-        self.embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+        # Initialize embeddings with minimal required parameters
+        self.embeddings = OpenAIEmbeddings(
+            openai_api_key=openai_api_key,
+            model="text-embedding-ada-002"
+        )
+        
+        # Initialize language model
         self.llm = ChatOpenAI(
-            temperature=0,
-            model_name="gpt-3.5-turbo",
-            openai_api_key=openai_api_key
+            openai_api_key=openai_api_key,
+            model="gpt-3.5-turbo",
+            temperature=0.7
         )
         
-        # Initialize vector store
-        self.vector_store = PGVector(
-            connection_string=db_connection_string,
-            embedding_function=self.embeddings,
-            collection_name="employee_reviews"
-        )
+        # Initialize vector store as None - will be created lazily when needed
+        self.vector_store = None
         
-        # Initialize sentiment analysis prompt
+        # Initialize fairness validator
+        self.validator = FairnessValidator()
+        
+        # Initialize result cache
+        self._result_cache = {}
+        self._employee_data_cache = {}
+        
+        # Initialize prompts
         self.sentiment_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert HR analyst. Analyze the employee review and historical context to provide:\n1. Sentiment analysis (positive/negative/neutral with score 0-1)\n2. Key strengths identified\n3. Areas of improvement\n4. Career growth potential\n\nFormat your response as JSON with these keys:\n{{\n    \"sentiment_score\": float,\n    \"sentiment_label\": str,\n    \"strengths\": list[str],\n    \"improvements\": list[str],\n    \"growth_potential\": str,\n    \"confidence\": float\n}}"),
-            ("human", "{current_review}\n\nHistorical Context:\n{historical_context}\n\nPerformance Metrics:\n{performance_metrics}")
+            ("system", "You are an expert at analyzing employee performance reviews and identifying key themes and sentiments."),
+            ("user", "Analyze the following performance review and provide a detailed analysis:\n\n{review_text}")
         ])
         
-        # Initialize promotion recommendation prompt
         self.promotion_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert HR advisor. Based on the employee's review analysis and performance metrics, provide a promotion recommendation. Consider:\n- Sentiment analysis results\n- Historical performance trends\n- Current role and potential next steps\n- Quantitative metrics\n\nFormat your response as JSON with these keys:\n{{\n    \"promotion_recommended\": bool,\n    \"confidence_score\": float,\n    \"recommended_role\": str,\n    \"rationale\": str,\n    \"development_areas\": list[str],\n    \"timeline\": str\n}}"),
-            ("human", "{sentiment_analysis}\n\nPerformance Metrics:\n{performance_metrics}\n\nHistorical Reviews:\n{historical_reviews}")
+            ("system", "You are an expert at evaluating employee performance and making promotion recommendations."),
+            ("user", "Based on the following performance review and metrics, provide a promotion recommendation:\n\nReview: {review_text}\n\nMetrics: {metrics}")
         ])
+        
+        # Initialize output parsers
+        self.sentiment_parser = PydanticOutputParser(pydantic_object=SentimentAnalysis)
+        self.promotion_parser = PydanticOutputParser(pydantic_object=PromotionRecommendation)
+        
+        # Initialize chains
+        self.sentiment_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.sentiment_prompt,
+            output_parser=self.sentiment_parser
+        )
+        
+        self.promotion_chain = LLMChain(
+            llm=self.llm,
+            prompt=self.promotion_prompt,
+            output_parser=self.promotion_parser
+        )
+
+    def _initialize_vector_store(self):
+        """Lazily initialize the vector store when needed."""
+        if self.vector_store is None:
+            try:
+                self.vector_store = FAISS.from_texts(
+                    ["Initial placeholder text"],
+                    self.embeddings
+                )
+            except Exception as e:
+                logger.error(f"Error initializing vector store: {str(e)}")
+                if "insufficient_quota" in str(e):
+                    logger.warning("OpenAI API quota exceeded. Vector store functionality will be limited.")
+                    # Create a mock vector store that returns empty results
+                    self.vector_store = None
+                else:
+                    raise
+
+    def _cache_result(self, result: Dict[str, Any], employee_data: Dict[str, Any]):
+        """Cache assessment results for validation."""
+        self._result_cache[employee_data["id"]] = result
+        self._employee_data_cache[employee_data["id"]] = employee_data
+
+    def _run_validation(self) -> Dict[str, Any]:
+        """Run fairness validation on cached results."""
+        if len(self._result_cache) < 5:
+            return {
+                "status": "skipped",
+                "message": "Not enough data for meaningful validation (minimum 5 assessments required)"
+            }
+
+        # Run validations
+        sentiment_results = self.validator.validate_sentiment_analysis(
+            list(self._result_cache.values()),
+            list(self._employee_data_cache.values())
+        )
+        
+        promotion_results = self.validator.validate_promotion_recommendations(
+            list(self._result_cache.values()),
+            list(self._employee_data_cache.values())
+        )
+        
+        # Store results
+        self.validator.results = sentiment_results + promotion_results
+        
+        # Generate report
+        report = self.validator.generate_report()
+        
+        # Log validation results
+        self.validator.log_results()
+        
+        return {
+            "status": "completed",
+            "report": report,
+            "has_failures": report["failed_validations"] > 0
+        }
 
     @retry(
         stop=stop_after_attempt(3),
@@ -59,11 +162,18 @@ class AssessmentPipeline:
     async def get_similar_reviews(self, review_text: str, limit: int = 3) -> List[Document]:
         """Retrieve similar historical reviews from vector store."""
         try:
+            self._initialize_vector_store()
+            if self.vector_store is None:
+                logger.warning("Vector store not available due to API quota limits. Returning empty results.")
+                return []
             results = await self.vector_store.asimilarity_search(review_text, k=limit)
             logger.info(f"Retrieved {len(results)} similar reviews")
             return results
         except Exception as e:
             logger.error(f"Error retrieving similar reviews: {str(e)}")
+            if "insufficient_quota" in str(e):
+                logger.warning("OpenAI API quota exceeded. Returning empty results.")
+                return []
             raise
 
     @retry(
@@ -154,14 +264,33 @@ class AssessmentPipeline:
                 ]
             }
 
-            return {
+            result = {
                 "status": "success",
                 "sentiment_analysis": sentiment_analysis,
-                "promotion_recommendation": promotion_recommendation
+                "promotion_recommendation": promotion_recommendation,
+                "employee_id": employee_id
             }
 
+            # Cache result for validation
+            employee_data = {
+                "id": employee_id,
+                "department": review_text.split("Department:")[1].split("\n")[0].strip(),
+                "role_level": review_text.split("Position:")[1].split("\n")[0].strip(),
+                "gender": "unknown"  # You might want to add this to your assessment form
+            }
+            self._cache_result(result, employee_data)
+
+            # Run validation if we have enough data
+            validation_result = self._run_validation()
+            if validation_result["status"] == "completed" and validation_result["has_failures"]:
+                self.logger.warning("Fairness validation detected potential biases in assessments")
+                result["validation_warning"] = True
+                result["validation_report"] = validation_result["report"]
+
+            return result
+
         except Exception as e:
-            logger.error(f"Error in mock analysis: {str(e)}")
+            self.logger.error(f"Error in mock analysis: {str(e)}")
             return {
                 "status": "error",
                 "error": str(e)

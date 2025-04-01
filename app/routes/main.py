@@ -160,6 +160,10 @@ def view_assessment(id):
                     performance_metrics=metrics
                 )
                 
+                if not result or "status" not in result:
+                    logger.error("Invalid analysis result format")
+                    return None
+                
                 return result
             except Exception as e:
                 logger.error(f"Error in analysis: {str(e)}")
@@ -171,10 +175,14 @@ def view_assessment(id):
         analysis = loop.run_until_complete(get_analysis())
         loop.close()
 
+        if analysis is None:
+            flash('Unable to analyze the assessment. Please try again later.', 'warning')
+            return render_template('view_assessment.html', assessment=assessment, analysis=None)
+
         return render_template('view_assessment.html', assessment=assessment, analysis=analysis)
     except Exception as e:
         logger.error(f"Error viewing assessment: {str(e)}")
-        flash('An error occurred while viewing the assessment.', 'danger')
+        flash('An error occurred while viewing the assessment. Please try again later.', 'danger')
         return redirect(url_for('main.dashboard'))
 
 @main.route('/assessment/<int:id>/edit', methods=['GET', 'POST'])

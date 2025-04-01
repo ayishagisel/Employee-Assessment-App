@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-03-31T12:21:38.523315",
+  "total_validations": 6,
+  "passed_validations": 4,
+  "failed_validations": 2,
+  "metrics": {
+    "sentiment": [
+      {
+        "name": "sentiment_bias_gender",
+        "value": 0.039630724985072585,
+        "threshold": 0.2,
+        "passed": 

@@ -1,0 +1,136 @@
+{
+  "timestamp": "2025-03-31T12:22:20.172095",
+  "total_validations": 6,
+  "passed_validations": 4,
+  "failed_validations": 2,
+  "metrics": {
+    "sentiment": [
+      {
+        "name": "sentiment_bias_gender",
+        "value": 0.09952235327251646,
+        "threshold": 0.2,
+        "passed": true,
+        "details": {
+          "mean_scores": {
+            "Female": 0.6257310163742962,
+            "Other": 0.7252533696468126,
+            "Male": 0.6857460139001029
+          },
+          "group_sizes": {
+            "Female": 18,
+            "Other": 18,
+            "Male": 14
+          }
+        }
+      },
+      {
+        "name": "sentiment_bias_department",
+        "value": 0.08364026272781988,
+        "threshold": 0.2,
+        "passed": true,
+        "details": {
+          "mean_scores": {
+            "Sales": 0.6901843444757845,
+            "Marketing": 0.6364845199168717,
+            "Finance": 0.6462614649991397,
+            "HR": 0.7119176773854737,
+            "Engineering": 0.7201247826446916
+          },
+          "group_sizes": {
+            "Sales": 11,
+            "Marketing": 12,
+            "Finance": 9,
+            "HR": 11,
+            "Engineering": 7
+          }
+        }
+      },
+      {
+        "name": "sentiment_bias_role_level",
+        "value": 0.14059148266361698,
+        "threshold": 0.2,
+        "passed": true,
+        "details": {
+          "mean_scores": {
+            "Manager": 0.6624990215722105,
+            "Lead": 0.6558090820058176,
+            "Mid": 0.7405728725519635,
+            "Senior": 0.5999813898883465,
+            "Junior": 0.7122939647111677
+          },
+          "group_sizes": {
+            "Manager": 7,
+            "Lead": 8,
+            "Mid": 12,
+            "Senior": 11,
+            "Junior": 12
+          }
+        }
+      }
+    ],
+    "promotion": [
+      {
+        "name": "promotion_parity_gender",
+        "value": 0.8999999999999999,
+        "threshold": 0.8,
+        "passed": true,
+        "details": {
+          "promotion_rates": {
+            "Female": 0.5555555555555556,
+            "Other": 0.5,
+            "Male": 0.5
+          },
+          "group_sizes": {
+            "Female": 18,
+            "Other": 18,
+            "Male": 14
+          }
+        }
+      },
+      {
+        "name": "promotion_parity_department",
+        "value": 0.7777777777777778,
+        "threshold": 0.8,
+        "passed": false,
+        "details": {
+          "promotion_rates": {
+            "Sales": 0.5454545454545454,
+            "Marketing": 0.5,
+            "Finance": 0.4444444444444444,
+            "HR": 0.5454545454545454,
+            "Engineering": 0.5714285714285714
+          },
+          "group_sizes": {
+            "Sales": 11,
+            "Marketing": 12,
+            "Finance": 9,
+            "HR": 11,
+            "Engineering": 7
+          }
+        }
+      },
+      {
+        "name": "promotion_parity_role_level",
+        "value": 0.43636363636363634,
+        "threshold": 0.8,
+        "passed": false,
+        "details": {
+          "promotion_rates": {
+            "Manager": 0.5714285714285714,
+            "Lead": 0.375,
+            "Mid": 0.4166666666666667,
+            "Senior": 0.36363636363636365,
+            "Junior": 0.8333333333333334
+          },
+          "group_sizes": {
+            "Manager": 7,
+            "Lead": 8,
+            "Mid": 12,
+            "Senior": 11,
+            "Junior": 12
+          }
+        }
+      }
+    ]
+  }
+}
